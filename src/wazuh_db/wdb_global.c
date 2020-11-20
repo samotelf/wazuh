@@ -1182,16 +1182,22 @@ int wdb_global_check_manager_keepalive(wdb_t *wdb) {
         return -1;
     }
 
+    int result = -1;
+
     sqlite3_stmt *stmt = wdb->stmt[WDB_STMT_GLOBAL_CHECK_MANAGER_KEEPALIVE];
 
     switch (sqlite3_step(stmt)) {
     case SQLITE_ROW:
-        return sqlite3_column_int(stmt, 0);
+        result = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+        return result;
 
     case SQLITE_DONE:
+        sqlite3_finalize(stmt);
         return 0;
 
     default:
+        sqlite3_finalize(stmt);
         return -1;
     }
 }
