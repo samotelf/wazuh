@@ -1201,10 +1201,10 @@ int wdb_global_check_manager_keepalive(wdb_t *wdb) {
     switch (sqlite3_step(stmt)) {
     case SQLITE_ROW:
         result = sqlite3_column_int(stmt, 0);
-
+        break;
     case SQLITE_DONE:
         result = OS_SUCCESS;
-
+        break;
     default:
         result = OS_INVALID;
     }

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "os_err.h"
 #include "wazuh_db/wdb.h"
 #include "../wrappers/wazuh/shared/debug_op_wrappers.h"
 #include "../wrappers/externals/sqlite/sqlite3_wrappers.h"
@@ -5023,37 +5024,38 @@ void test_wdb_global_get_all_agents_err(void **state)
 
 /* Tests wdb_global_check_manager_keepalive */
 
-void test_wdb_global_check_manager_keepalive_stmt_error(void **state) {
+void test_wdb_global_check_manager_keepalive_prepare_error(void **state) {
     test_struct_t *data  = (test_struct_t *)*state;
 
-    will_return(__wrap_wdb_stmt_cache, -1);
-    expect_string(__wrap__merror, formatted_msg, "DB(global) Can't cache statement");
+    will_return(__wrap_sqlite3_errmsg, "ERROR MESSAGE");
+    will_return(__wrap_sqlite3_prepare_v2, -1);
+    expect_string(__wrap__merror, formatted_msg, "DB(global) sqlite3_prepare_v2(): ERROR MESSAGE");
 
-    assert_int_equal(wdb_global_check_manager_keepalive(data->wdb), -1);
+    assert_int_equal(wdb_global_check_manager_keepalive(data->wdb), OS_INVALID);
 }
 
 void test_wdb_global_check_manager_keepalive_step_error(void **state) {
     test_struct_t *data  = (test_struct_t *)*state;
 
-    will_return(__wrap_wdb_stmt_cache, 10);
+    will_return(__wrap_sqlite3_prepare_v2, SQLITE_OK);
     will_return(__wrap_sqlite3_step, SQLITE_ERROR);
 
-    assert_int_equal(wdb_global_check_manager_keepalive(data->wdb), -1);
+    assert_int_equal(wdb_global_check_manager_keepalive(data->wdb), OS_INVALID);
 }
 
 void test_wdb_global_check_manager_keepalive_step_nodata(void **state) {
     test_struct_t *data  = (test_struct_t *)*state;
 
-    will_return(__wrap_wdb_stmt_cache, 10);
+    will_return(__wrap_sqlite3_prepare_v2, SQLITE_OK);
     will_return(__wrap_sqlite3_step, SQLITE_DONE);
 
-    assert_int_equal(wdb_global_check_manager_keepalive(data->wdb), 0);
+    assert_int_equal(wdb_global_check_manager_keepalive(data->wdb), OS_SUCCESS);
 }
 
 void test_wdb_global_check_manager_keepalive_step_ok(void **state) {
     test_struct_t *data  = (test_struct_t *)*state;
 
-    will_return(__wrap_wdb_stmt_cache, 10);
+    will_return(__wrap_sqlite3_prepare_v2, SQLITE_OK);
     will_return(__wrap_sqlite3_step, SQLITE_ROW);
     expect_value(__wrap_sqlite3_column_int, iCol, 0);
     will_return(__wrap_sqlite3_column_int, 1);
@@ -5537,7 +5539,7 @@ int main()
         cmocka_unit_test_setup_teardown(test_wdb_global_get_all_agents_due, test_setup, test_teardown),
         cmocka_unit_test_setup_teardown(test_wdb_global_get_all_agents_err, test_setup, test_teardown),
         /* Tests wdb_global_check_manager_keepalive */
-        cmocka_unit_test_setup_teardown(test_wdb_global_check_manager_keepalive_stmt_error, test_setup, test_teardown),
+        cmocka_unit_test_setup_teardown(test_wdb_global_check_manager_keepalive_prepare_error, test_setup, test_teardown),
         cmocka_unit_test_setup_teardown(test_wdb_global_check_manager_keepalive_step_error, test_setup, test_teardown),
         cmocka_unit_test_setup_teardown(test_wdb_global_check_manager_keepalive_step_nodata, test_setup, test_teardown),
         cmocka_unit_test_setup_teardown(test_wdb_global_check_manager_keepalive_step_ok, test_setup, test_teardown),
