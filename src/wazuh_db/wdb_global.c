@@ -9,6 +9,7 @@
  * Foundation.
  */
 
+#include "os_err.h"
 #include "wdb.h"
 
 // List of agent information fields in global DB
@@ -34,6 +35,14 @@ static const char *global_db_agent_fields[] = {
     ":connection_status",
     ":id",
     NULL
+};
+
+typedef enum wdb_stmt_global {
+    WDB_STMT_GLOBAL_CHECK_MANAGER_KEEPALIVE,
+} wdb_stmt_metadata;
+
+static const char *SQL_GLOBAL_STMT[] = {
+    "SELECT COUNT(*) FROM agent WHERE id=0 AND last_keepalive=253402300799;",
 };
 
 int wdb_global_insert_agent(wdb_t *wdb, int id, char* name, char* ip, char* register_ip, char* internal_key, char* group, int date_add) {
@@ -1175,31 +1184,33 @@ int wdb_global_reset_agents_connection(wdb_t *wdb, const char *sync_status) {
     }
 }
 
-// Check the agent 0 status in the global database
+// Check the presence of manager's keepalive in the global database
 int wdb_global_check_manager_keepalive(wdb_t *wdb) {
-    if (wdb_stmt_cache(wdb, WDB_STMT_GLOBAL_CHECK_MANAGER_KEEPALIVE) < 0) {
-        merror("DB(%s) Can't cache statement", wdb->id);
-        return -1;
-    }
-
+    sqlite3_stmt *stmt = NULL;
     int result = -1;
 
-    sqlite3_stmt *stmt = wdb->stmt[WDB_STMT_GLOBAL_CHECK_MANAGER_KEEPALIVE];
+    if (sqlite3_prepare_v2(wdb->db,
+                           SQL_GLOBAL_STMT[WDB_STMT_GLOBAL_CHECK_MANAGER_KEEPALIVE],
+                           -1,
+                           &stmt,
+                           NULL) != SQLITE_OK) {
+        merror("DB(%s) sqlite3_prepare_v2(): %s", wdb->id, sqlite3_errmsg(wdb->db));
+        return OS_INVALID;
+    }
 
     switch (sqlite3_step(stmt)) {
     case SQLITE_ROW:
         result = sqlite3_column_int(stmt, 0);
-        sqlite3_finalize(stmt);
-        return result;
 
     case SQLITE_DONE:
-        sqlite3_finalize(stmt);
-        return 0;
+        result = OS_SUCCESS;
 
     default:
-        sqlite3_finalize(stmt);
-        return -1;
+        result = OS_INVALID;
     }
+
+    sqlite3_finalize(stmt);
+    return result;
 }
 
 cJSON* wdb_global_get_agents_by_connection_status (wdb_t *wdb, int last_agent_id, const char* connection_status, wdbc_result* status) {
